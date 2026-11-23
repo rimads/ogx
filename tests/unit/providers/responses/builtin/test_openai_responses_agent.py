@@ -504,12 +504,13 @@ def _offered_tool_names(call):
 
 
 @pytest.fixture
-def web_search_tool(openai_responses_impl, mock_web_search_api):
-    openai_responses_impl.web_search_api.tool_def.return_value = ToolDef(
-        name="web_search", description="Search the web", input_schema={}
+def web_search_tool(openai_responses_impl, mock_tool_runtime_api):
+    # At this rev web_search runs through the tool runtime, not a web_search API.
+    openai_responses_impl.tool_groups_api.get_tool.return_value = ToolDef(
+        name="web_search", toolgroup_id="web_search", description="Search the web", input_schema={}
     )
-    mock_web_search_api.search.return_value = WebSearchResult(content="Search results")
-    return mock_web_search_api
+    mock_tool_runtime_api.invoke_tool.return_value = ToolInvocationResult(content="Search results")
+    return mock_tool_runtime_api
 
 
 async def test_max_tool_calls_stops_offering_builtin_tools(openai_responses_impl, mock_inference_api, web_search_tool):
@@ -526,7 +527,7 @@ async def test_max_tool_calls_stops_offering_builtin_tools(openai_responses_impl
         )
     )
 
-    assert web_search_tool.search.call_count == 1
+    assert web_search_tool.invoke_tool.call_count == 1
     calls = mock_inference_api.openai_chat_completion.call_args_list
     assert len(calls) == 2
     assert _offered_tool_names(calls[0]) == ["web_search"]
@@ -554,7 +555,7 @@ async def test_max_tool_calls_keeps_function_tools(openai_responses_impl, mock_i
         )
     )
 
-    assert web_search_tool.search.call_count == 1
+    assert web_search_tool.invoke_tool.call_count == 1
     calls = mock_inference_api.openai_chat_completion.call_args_list
     assert len(calls) == 2
     assert sorted(_offered_tool_names(calls[0])) == ["get_weather", "web_search"]
@@ -583,7 +584,7 @@ async def test_max_tool_calls_clears_tool_choice_when_no_tools_remain(
         )
     )
 
-    assert web_search_tool.search.call_count == 1
+    assert web_search_tool.invoke_tool.call_count == 1
     calls = mock_inference_api.openai_chat_completion.call_args_list
     assert len(calls) == 2
     assert _offered_tool_names(calls[0]) == ["web_search"]
@@ -631,7 +632,7 @@ async def test_max_tool_calls_clears_tool_choice_naming_dropped_tool(
         )
     )
 
-    assert web_search_tool.search.call_count == 1
+    assert web_search_tool.invoke_tool.call_count == 1
     calls = mock_inference_api.openai_chat_completion.call_args_list
     assert len(calls) == 3
     assert calls[0].args[0].tool_choice == {"type": "function", "function": {"name": "web_search"}}
@@ -660,7 +661,7 @@ async def test_max_tool_calls_keeps_function_tool_named_like_builtin(
         )
     )
 
-    assert web_search_tool.search.call_count == 1
+    assert web_search_tool.invoke_tool.call_count == 1
     calls = mock_inference_api.openai_chat_completion.call_args_list
     assert len(calls) == 2
     assert sorted(_offered_tool_names(calls[0])) == ["file_search", "web_search"]

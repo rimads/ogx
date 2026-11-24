@@ -43,6 +43,8 @@ from ogx_api import (
     ToolInvocationResult,
     ToolRuntime,
     VectorIO,
+    WebSearchActionFind,
+    WebSearchActionOpenPage,
     WebSearchActionSearch,
     WebSearchSource,
 )
@@ -611,16 +613,21 @@ class ToolExecutor:
                 if has_error:
                     message.status = "failed"
                 elif result and (metadata := getattr(result, "metadata", None)):
-                    sources = []
-                    for source in metadata.get("sources", []):
-                        if "url" in source:
-                            sources.append(WebSearchSource(url=source["url"]))
-                    query = metadata.get("query", tool_kwargs.get("query", ""))
-                    message.action = WebSearchActionSearch(
-                        query=query,
-                        queries=[query],
-                        sources=sources,
-                    )
+                    provider_action = metadata.get("action")
+                    # Only typed objects are trusted; a dict falls back to search rather than risk parsing.
+                    if isinstance(provider_action, WebSearchActionOpenPage | WebSearchActionFind):
+                        message.action = provider_action
+                    else:
+                        sources = []
+                        for source in metadata.get("sources", []):
+                            if "url" in source:
+                                sources.append(WebSearchSource(url=source["url"]))
+                        query = metadata.get("query", tool_kwargs.get("query", ""))
+                        message.action = WebSearchActionSearch(
+                            query=query,
+                            queries=[query],
+                            sources=sources,
+                        )
             elif function.name == "file_search":
                 message = OpenAIResponseOutputMessageFileSearchToolCall(
                     id=item_id,
